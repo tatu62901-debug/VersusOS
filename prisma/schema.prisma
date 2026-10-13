@@ -1,13 +1,164 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../app/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------------------
+// TABELAS DO BETTER AUTH
+// -------------------------------------------------------------------------
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relações do sistema
+  sessions      Session[]
+  accounts      Account[]
+  teams         Team[]
+  tournaments   Tournament[] // Torneios criados por este usuário
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("verification")
+}
+
+// -------------------------------------------------------------------------
+// ENTIDADES DO SISTEMA DE E-SPORTS
+// -------------------------------------------------------------------------
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  game        String   // Ex: Counter-Strike 2, Valorant, League of Legends
+  logoUrl     String?  // Imagem no Vercel Blob
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Dono da equipe (Utilizador autenticado)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Jogadores da equipe
+  players Player[]
+
+  // Partidas em que o time participou (como Time A ou Time B)
+  homeMatches Match[] @relation("HomeTeam")
+  awayMatches Match[] @relation("AwayTeam")
+
+  @@map("teams")
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  nickname  String
+  role      String   // Ex: IGL, Awper, Support, Duelist
+  age       Int?
+  avatarUrl String?  // Imagem do jogador no Vercel Blob
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@map("players")
+}
+
+model Tournament {
+  id          String   @id @default(cuid())
+  title       String
+  game        String   // Ex: Valorant
+  bannerUrl   String?
+  description String?
+  status      String   @default("UPCOMING") // UPCOMING, ONGOING, FINISHED
+  startDate   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Organizador do campeonato
+  organizerId String
+  organizer   User   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  // Partidas do campeonato
+  matches Match[]
+
+  @@map("tournaments")
+}
+
+model Match {
+  id          String   @id @default(cuid())
+  scheduledAt DateTime
+  status      String   @default("PENDING") // PENDING, LIVE, FINISHED
+  
+  // Placar da partida
+  homeScore   Int      @default(0)
+  awayScore   Int      @default(0)
+
+  // Campeonato ao qual pertence a partida
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+
+  // Time Mandante / Time A
+  homeTeamId String
+  homeTeam   Team   @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Cascade)
+
+  // Time Visitante / Time B
+  awayTeamId String
+  awayTeam   Team   @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("matches")
 }
