@@ -1,4 +1,5 @@
-import { defineConfig } from "prisma/config";
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -7,6 +8,7 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: "postgresql://neondb_owner:npg_xJHW4BuNMQs2@ep-lucky-mud-b80bx79p.c-14.us-east-1.aws.neon.tech/neondb?sslmode=require",
+    // Conexão direta (sem -pooler), usada nas migrações
+    url: env("DATABASE_URL_UNPOOLED"),
   },
 });

@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      // Permite enviar imagens de até 2 MB nos formulários (o padrão do Next é 1 MB)
+      bodySizeLimit: "3mb",
+    },
+  },
 };
 
 export default nextConfig;

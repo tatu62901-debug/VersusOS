@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../app/generated/prisma"
 }
 
 datasource db {
@@ -8,16 +7,18 @@ datasource db {
 }
 
 model User {
-  id            String    @id
+  id            String    @id @default(cuid())
   name          String
   email         String    @unique
-  emailVerified Boolean
+  emailVerified Boolean   @default(false)
   image         String?
-  createdAt     DateTime
-  updatedAt     DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
   sessions      Session[]
   accounts      Account[]
   teams         Team[]
+  players       Player[]
+  joinRequests  JoinRequest[]
   @@map("user")
 }
 
@@ -62,29 +63,94 @@ model Verification {
   @@map("verification")
 }
 
+// Time de e-sports. O "dono" (userId) é quem criou e gerencia o time.
 model Team {
-  id          String      @id @default(cuid())
-  name        String      @unique
-  game        String
-  logoUrl     String?
-  description String?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  userId      String
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  players     Player[]
+  id            String         @id @default(cuid())
+  name          String         @unique
+  game          String
+  logoUrl       String?
+  description   String?
+  inviteCode    String         @unique // código que o dono passa pra outras pessoas entrarem no time
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  players       Player[]
+  registrations Registration[]
+  joinRequests  JoinRequest[]
   @@map("teams")
 }
 
+// Jogador do elenco de um time. Se userId estiver preenchido, o jogador é uma
+// conta que entrou no time pelo código; se for null, foi cadastrado pelo dono.
 model Player {
-  id          String    @id @default(cuid())
-  nickname    String
-  role        String
-  age         Int
-  avatarUrl   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  teamId      String
-  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  nickname  String
+  role      String
+  age       Int
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@unique([teamId, userId])
   @@map("players")
+}
+
+// Campeonato. Os dados são cadastrados pelo seed (prisma/seed.ts).
+model Tournament {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  game          String
+  description   String?
+  prize         Int // premiação em reais
+  maxTeams      Int
+  startDate     DateTime
+  imageUrl      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  registrations Registration[]
+  @@map("tournaments")
+}
+
+// Inscrição de um time em um campeonato (relação N para N entre Team e Tournament).
+model Registration {
+  id           String     @id @default(cuid())
+  createdAt    DateTime   @default(now())
+  teamId       String
+  team         Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  @@unique([teamId, tournamentId])
+  @@map("registrations")
+}
+
+// Pedido de entrada em um time. O dono do time aprova (vira Player) ou recusa.
+model JoinRequest {
+  id        String   @id @default(cuid())
+  status    String   @default("PENDENTE") // PENDENTE ou RECUSADO
+  nickname  String
+  role      String
+  age       Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([teamId, userId])
+  @@map("join_requests")
+}
+
+// Tentativas de login que falharam (usadas para limitar tentativas).
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  createdAt DateTime @default(now())
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+  @@map("login_attempts")
 }

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "user" ALTER COLUMN "emailVerified" SET DEFAULT false,
+ALTER COLUMN "createdAt" SET DEFAULT CURRENT_TIMESTAMP;
