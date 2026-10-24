@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import LogoutButton from '@/app/painel/LogoutButton';
+import { ehAdmin } from '@/lib/admin';
 
 type Props = {
-  user: { id: string; name: string } | null;
+  user: { id: string; name: string; email?: string } | null;
 };
 
 export default function Header({ user }: Props) {
@@ -39,6 +40,14 @@ export default function Header({ user }: Props) {
             >
               Painel
             </Link>
+            {ehAdmin(user.email) && (
+              <Link
+                href="/admin"
+                className="px-3 py-2 text-sm font-semibold text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                Admin
+              </Link>
+            )}
             <LogoutButton />
           </nav>
         ) : (

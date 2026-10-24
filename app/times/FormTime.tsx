@@ -1,10 +1,10 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import Link from 'next/link';
 import { criarTime, editarTime } from '@/app/times/actions';
 import CampoImagem from '@/app/components/CampoImagem';
-import { JOGOS } from '@/lib/regras';
+import { JOGOS, limitesDoJogo } from '@/lib/regras';
 import { ui } from '@/lib/ui';
 import type { EstadoForm } from '@/lib/validacao';
 
@@ -23,6 +23,8 @@ export default function FormTime({ time }: Props) {
   const [estado, formAction, pendente] = useActionState<EstadoForm, FormData>(acao, {});
 
   const v = estado.valores;
+  const [jogoEscolhido, setJogoEscolhido] = useState(v?.game ?? time?.game ?? '');
+  const limitesEscolhido = jogoEscolhido ? limitesDoJogo(jogoEscolhido) : null;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -51,6 +53,7 @@ export default function FormTime({ time }: Props) {
           name="game"
           required
           defaultValue={v?.game ?? time?.game ?? ''}
+          onChange={(e) => setJogoEscolhido(e.target.value)}
           className={ui.campo}
         >
           <option value="" disabled>Escolha um jogo</option>
@@ -58,6 +61,12 @@ export default function FormTime({ time }: Props) {
             <option key={jogo} value={jogo}>{jogo}</option>
           ))}
         </select>
+        {limitesEscolhido && (
+          <p className="text-[11px] text-slate-500 mt-1">
+            Formato: {limitesEscolhido.formato}. O time precisa de pelo menos {limitesEscolhido.min} jogador(es) para
+            se inscrever e comporta no máximo {limitesEscolhido.max}.
+          </p>
+        )}
       </div>
 
       <div>

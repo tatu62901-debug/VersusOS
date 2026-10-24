@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { exigirUsuario } from '@/lib/permissoes';
-import { MAX_JOGADORES } from '@/lib/regras';
+import { limitesDoJogo } from '@/lib/regras';
 import { apagarImagem, enviarImagem, lerImagem } from '@/lib/imagem';
 import {
   type EstadoForm,
@@ -91,6 +91,14 @@ export async function editarTime(
   if (nomeEmUso) return { erro: 'Já existe um time com esse nome. Escolha outro.', valores };
 
   if (v.dados.game !== time.game) {
+    const jogadores = await prisma.player.count({ where: { teamId: timeId } });
+    const novoMax = limitesDoJogo(v.dados.game).max;
+    if (jogadores > novoMax) {
+      return {
+        erro: `${v.dados.game} comporta no máximo ${novoMax} jogador(es) no elenco, e o time tem ${jogadores}. Remova jogadores antes de trocar o jogo.`,
+        valores,
+      };
+    }
     const inscricoes = await prisma.registration.count({ where: { teamId: timeId } });
     if (inscricoes > 0) {
       return {
@@ -230,8 +238,9 @@ export async function adicionarJogador(
   const leitura = await lerImagem(formData);
   if (!leitura.ok) return { erro: leitura.erro, valores };
 
-  if (time.players.length >= MAX_JOGADORES) {
-    return { erro: `O time já tem o máximo de ${MAX_JOGADORES} jogadores.`, valores };
+  const maxJogadores = limitesDoJogo(time.game).max;
+  if (time.players.length >= maxJogadores) {
+    return { erro: `O elenco de ${time.game} comporta no máximo ${maxJogadores} jogador(es).`, valores };
   }
   if (time.players.some((j) => j.nickname.toLowerCase() === v.dados.nickname.toLowerCase())) {
     return { erro: 'Já existe um jogador com esse nickname neste time.', valores };

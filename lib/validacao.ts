@@ -106,3 +106,93 @@ export function validarNovaSenha(
   if (senhaNova !== confirmacao) return falha('A confirmação não é igual à nova senha.');
   return { ok: true };
 }
+
+export function validarMotivo(formData: FormData): Resultado<{ motivo: string }> {
+  const motivo = texto(formData, 'motivo');
+  if (motivo.length < 5 || motivo.length > 200) {
+    return falha('Informe o motivo (de 5 a 200 caracteres).');
+  }
+  return { ok: true, dados: { motivo } };
+}
+
+// Converte "AAAA-MM-DD" em data válida (ou null se o texto não for uma data real)
+function lerData(texto: string, horaUtc: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return null;
+  const data = new Date(`${texto}T${horaUtc}`);
+  if (Number.isNaN(data.getTime())) return null;
+  // confere se a data não "virou" outra (ex: 30/02)
+  const conferencia = new Date(`${texto}T12:00:00Z`);
+  return conferencia.toISOString().slice(0, 10) === texto ? data : null;
+}
+
+export function validarCampeonato(formData: FormData): Resultado<{
+  name: string;
+  game: string;
+  description: string | null;
+  prize: number;
+  maxTeams: number;
+  dataTexto: string; // AAAA-MM-DD (início)
+  startDate: Date;
+  prazoTexto: string; // AAAA-MM-DD (fim das inscrições)
+  registrationDeadline: Date;
+}> {
+  const name = texto(formData, 'name');
+  const game = texto(formData, 'game');
+  const description = texto(formData, 'description');
+  const prizeTexto = texto(formData, 'prize');
+  const maxTexto = texto(formData, 'maxTeams');
+  const dataTexto = texto(formData, 'startDate');
+  const prazoTexto = texto(formData, 'registrationDeadline');
+
+  if (!name) return falha('Informe o nome do campeonato.');
+  if (name.length < 3 || name.length > 60) {
+    return falha('O nome do campeonato deve ter entre 3 e 60 caracteres.');
+  }
+  if (!game) return falha('Escolha o jogo do campeonato.');
+  if (!(JOGOS as readonly string[]).includes(game)) {
+    return falha('Jogo inválido. Escolha uma das opções da lista.');
+  }
+  if (description.length > 300) {
+    return falha('A descrição pode ter no máximo 300 caracteres.');
+  }
+
+  if (!prizeTexto) return falha('Informe a premiação (use 0 se não houver).');
+  const prize = Number(prizeTexto);
+  if (!Number.isInteger(prize) || prize < 0 || prize > 10_000_000) {
+    return falha('A premiação deve ser um número inteiro entre 0 e 10.000.000.');
+  }
+
+  if (!maxTexto) return falha('Informe o número máximo de times.');
+  const maxTeams = Number(maxTexto);
+  if (!Number.isInteger(maxTeams) || maxTeams < 2 || maxTeams > 128) {
+    return falha('O número de times deve ser um inteiro entre 2 e 128.');
+  }
+
+  if (!dataTexto) return falha('Informe a data de início.');
+  // 15h UTC = meio-dia no Brasil, pra a data não "voltar um dia" por causa do fuso
+  const startDate = lerData(dataTexto, '15:00:00Z');
+  if (!startDate) return falha('Data de início inválida.');
+
+  if (!prazoTexto) return falha('Informe o prazo final das inscrições.');
+  // o prazo vale até o fim do dia (23h59 no horário de Brasília)
+  const registrationDeadline = lerData(prazoTexto, '23:59:59-03:00');
+  if (!registrationDeadline) return falha('Prazo de inscrição inválido.');
+  if (prazoTexto > dataTexto) {
+    return falha('O prazo de inscrição não pode ser depois da data de início.');
+  }
+
+  return {
+    ok: true,
+    dados: {
+      name,
+      game,
+      description: description || null,
+      prize,
+      maxTeams,
+      dataTexto,
+      startDate,
+      prazoTexto,
+      registrationDeadline,
+    },
+  };
+}

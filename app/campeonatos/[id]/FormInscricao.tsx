@@ -9,7 +9,8 @@ import type { EstadoForm } from '@/lib/validacao';
 type Props = {
   campeonatoId: string;
   jogo: string;
-  times: { id: string; name: string }[]; // meus times deste jogo que ainda não estão inscritos
+  // meus times deste jogo que ainda não estão inscritos
+  times: { id: string; name: string; jogadores: number; minimo: number }[];
   timeInicial?: string;
 };
 
@@ -19,7 +20,8 @@ export default function FormInscricao({ campeonatoId, jogo, times, timeInicial }
     {}
   );
 
-  const inicial = times.some((t) => t.id === timeInicial) ? timeInicial : (times[0]?.id ?? '');
+  const habilitados = times.filter((t) => t.jogadores >= t.minimo);
+  const sugerido = habilitados.find((t) => t.id === timeInicial)?.id ?? habilitados[0]?.id ?? '';
 
   return (
     <form action={formAction} className="space-y-4">
@@ -30,15 +32,24 @@ export default function FormInscricao({ campeonatoId, jogo, times, timeInicial }
         <>
           <div>
             <label htmlFor="timeId" className={ui.label}>Escolha o seu time</label>
-            <select id="timeId" name="timeId" defaultValue={inicial} className={ui.campo}>
-              {times.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
+            <select id="timeId" name="timeId" defaultValue={sugerido} className={ui.campo}>
+              {times.map((t) => {
+                const incompleto = t.jogadores < t.minimo;
+                return (
+                  <option key={t.id} value={t.id} disabled={incompleto}>
+                    {t.name}
+                    {incompleto ? ` (faltam jogadores: ${t.jogadores}/${t.minimo})` : ''}
+                  </option>
+                );
+              })}
             </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              A inscrição fica aguardando a aprovação da administração.
+            </p>
           </div>
 
-          <button type="submit" disabled={pendente} className={ui.botaoPrimario}>
-            {pendente ? 'Inscrevendo...' : 'Inscrever time'}
+          <button type="submit" disabled={pendente || habilitados.length === 0} className={ui.botaoPrimario}>
+            {pendente ? 'Enviando...' : 'Inscrever time'}
           </button>
         </>
       ) : (

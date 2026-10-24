@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { exigirUsuario } from '@/lib/permissoes';
-import { MAX_JOGADORES, PEDIDO_PENDENTE, PEDIDO_RECUSADO } from '@/lib/regras';
+import { PEDIDO_PENDENTE, PEDIDO_RECUSADO, limitesDoJogo } from '@/lib/regras';
 import { type EstadoForm, texto, valoresDe, validarJogador } from '@/lib/validacao';
 
 const CAMPOS_ENTRAR = ['codigo', 'nickname', 'role', 'age'];
@@ -40,8 +40,9 @@ export async function solicitarEntrada(_estado: EstadoForm, formData: FormData):
   if (time.players.some((j) => j.userId === user.id)) {
     return { erro: 'Você já faz parte deste time.', valores };
   }
-  if (time.players.length >= MAX_JOGADORES) {
-    return { erro: `Este time já tem o máximo de ${MAX_JOGADORES} jogadores.`, valores };
+  const maxJogadores = limitesDoJogo(time.game).max;
+  if (time.players.length >= maxJogadores) {
+    return { erro: `Este time já tem o máximo de ${maxJogadores} jogador(es) para ${time.game}.`, valores };
   }
   if (time.players.some((j) => j.nickname.toLowerCase() === v.dados.nickname.toLowerCase())) {
     return { erro: 'Já existe um jogador com esse nickname neste time. Escolha outro.', valores };
@@ -85,8 +86,9 @@ export async function aprovarPedido(timeId: string, pedidoId: string): Promise<E
   });
   if (!pedido) return { erro: 'Este pedido não existe mais.' };
 
-  if (time.players.length >= MAX_JOGADORES) {
-    return { erro: `O time já tem o máximo de ${MAX_JOGADORES} jogadores.` };
+  const maxJogadores = limitesDoJogo(time.game).max;
+  if (time.players.length >= maxJogadores) {
+    return { erro: `O time já tem o máximo de ${maxJogadores} jogador(es) para ${time.game}.` };
   }
   if (time.players.some((j) => j.userId === pedido.userId)) {
     // Já estava no elenco por algum outro caminho: só limpa o pedido

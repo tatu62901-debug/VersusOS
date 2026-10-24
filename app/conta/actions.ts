@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { exigirUsuario } from '@/lib/permissoes';
 import { destroySession, encerrarOutrasSessoes } from '@/lib/session';
 import { apagarImagem } from '@/lib/imagem';
+import { ehAdmin, emailReservado } from '@/lib/admin';
 import {
   type EstadoForm,
   texto,
@@ -34,6 +35,16 @@ export async function atualizarPerfil(_estado: EstadoForm, formData: FormData): 
 
   const v = validarPerfil(formData);
   if (!v.ok) return { erro: v.erro, valores };
+
+  // O e-mail é o que define quem é administrador, então ele não pode ser mexido
+  if (v.dados.email !== user.email.toLowerCase()) {
+    if (ehAdmin(user.email)) {
+      return { erro: 'Contas de administrador não podem trocar o e-mail.', valores };
+    }
+    if (emailReservado(v.dados.email)) {
+      return { erro: 'Este e-mail é reservado e não pode ser usado.', valores };
+    }
+  }
 
   const emailEmUso = await prisma.user.findFirst({
     where: { email: v.dados.email, NOT: { id: user.id } },
@@ -99,6 +110,10 @@ export async function trocarSenha(_estado: EstadoForm, formData: FormData): Prom
 
 export async function excluirConta(_estado: EstadoForm, formData: FormData): Promise<EstadoForm> {
   const user = await exigirUsuario();
+
+  if (ehAdmin(user.email)) {
+    return { erro: 'Contas de administrador não podem ser excluídas.' };
+  }
 
   const senha = String(formData.get('senha') ?? '');
   if (!senha) return { erro: 'Digite a sua senha para confirmar.' };

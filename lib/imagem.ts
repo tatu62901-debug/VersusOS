@@ -59,7 +59,7 @@ export async function lerImagem(formData: FormData, campo = 'imagem'): Promise<L
 }
 
 // Envia a imagem para o Vercel Blob e devolve a URL pública.
-export async function enviarImagem(imagem: ImagemValida, pasta: 'times' | 'jogadores') {
+export async function enviarImagem(imagem: ImagemValida, pasta: 'times' | 'jogadores' | 'campeonatos') {
   const caminho = `${pasta}/${randomUUID()}.${imagem.extensao}`;
   const blob = await put(caminho, imagem.arquivo, {
     access: 'public',

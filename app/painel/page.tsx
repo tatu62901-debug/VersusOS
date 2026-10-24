@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { exigirUsuario } from '@/lib/permissoes';
-import { formatarData } from '@/lib/regras';
+import { INSC_APROVADA, formatarData } from '@/lib/regras';
 import Header from '@/app/components/Header';
 import Avatar from '@/app/components/Avatar';
 import { ui } from '@/lib/ui';
@@ -134,6 +134,15 @@ export default async function PainelPage() {
                       <p className="text-xs text-slate-400 truncate">
                         Time: {inscricao.team.name} · Início: {formatarData(inscricao.tournament.startDate)}
                       </p>
+                      <span
+                        className={`inline-block mt-2 text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${
+                          inscricao.status === INSC_APROVADA
+                            ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                            : 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                        }`}
+                      >
+                        {inscricao.status === INSC_APROVADA ? 'Aprovada' : 'Aguardando aprovação'}
+                      </span>
                     </div>
                   </Link>
                 </li>

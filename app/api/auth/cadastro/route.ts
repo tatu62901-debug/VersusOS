@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { emailReservado } from '@/lib/admin';
 
 export async function POST(request: Request) {
   try {
@@ -23,6 +24,14 @@ export async function POST(request: Request) {
     }
 
     const emailNormalizado = String(email).trim().toLowerCase();
+
+    // E-mails de administrador são reservados: essas contas só são criadas pelo seed
+    if (emailReservado(emailNormalizado)) {
+      return NextResponse.json(
+        { error: 'Este e-mail é reservado e não pode ser usado no cadastro.' },
+        { status: 400 }
+      );
+    }
 
     // Verificar se e-mail já existe
     const usuarioExistente = await prisma.user.findUnique({

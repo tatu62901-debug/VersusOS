@@ -3,12 +3,16 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { carregarTime, exigirUsuario } from '@/lib/permissoes';
 import {
-  MAX_JOGADORES,
+  CAMP_INSCRICOES,
+  INSC_APROVADA,
   PEDIDO_PENDENTE,
   formatarData,
+  formatarDataHora,
   formatarPremio,
+  limitesDoJogo,
   statusCampeonato,
 } from '@/lib/regras';
+import { avisoParaTime } from '@/lib/admin';
 import { excluirTime, regenerarCodigo, removerJogador, transferirLideranca } from '@/app/times/actions';
 import { aprovarPedido, recusarPedido } from '@/app/times/pedidos/actions';
 import { cancelarInscricao } from '@/app/campeonatos/actions';
@@ -31,7 +35,9 @@ export default async function TimePage({ params }: Props) {
   if (!contexto) notFound();
 
   const { time, ehDono, meuJogador } = contexto;
-  const lotado = time.players.length >= MAX_JOGADORES;
+  const limites = limitesDoJogo(time.game);
+  const lotado = time.players.length >= limites.max;
+  const faltamParaInscrever = Math.max(0, limites.min - time.players.length);
 
   // Só o dono vê os pedidos de entrada e os campeonatos abertos para inscrever
   const [pedidos, abertos] = ehDono
@@ -45,15 +51,25 @@ export default async function TimePage({ params }: Props) {
           .findMany({
             where: {
               game: time.game,
-              startDate: { gt: new Date() },
+              status: CAMP_INSCRICOES,
+              registrationDeadline: { gt: new Date() },
               registrations: { none: { teamId: time.id } },
             },
             orderBy: { startDate: 'asc' },
-            include: { _count: { select: { registrations: true } } },
+            include: {
+              _count: { select: { registrations: { where: { status: INSC_APROVADA } } } },
+            },
           })
           .then((lista) => lista.filter((c) => statusCampeonato(c, c._count.registrations).aberto)),
       ])
     : [[], []];
+
+  // Avisos de ações da administração sobre este time (jogador removido, time tirado de campeonato)
+  const avisos = await prisma.adminLog.findMany({
+    where: { teamId: time.id },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+  });
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans">
@@ -108,6 +124,22 @@ export default async function TimePage({ params }: Props) {
             <p className="text-sm text-slate-300 mt-4 break-words">{time.description}</p>
           )}
         </section>
+
+        {/* Avisos da administração */}
+        {avisos.length > 0 && (
+          <section className="bg-amber-500/5 border border-amber-500/30 rounded-2xl p-5 md:p-6">
+            <h2 className="text-lg font-bold text-amber-400 mb-3">Avisos da administração</h2>
+            <ul className="space-y-2">
+              {avisos.map((aviso) => (
+                <li key={aviso.id} className="text-sm">
+                  <p className="text-slate-200 break-words">{avisoParaTime(aviso.action, aviso.targetName)}</p>
+                  {aviso.reason && <p className="text-xs text-slate-400 break-words">Motivo: {aviso.reason}</p>}
+                  <p className="text-[11px] text-slate-500">{formatarDataHora(aviso.createdAt)}</p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* Código de convite (só o dono vê) */}
         {ehDono && (
@@ -177,7 +209,7 @@ export default async function TimePage({ params }: Props) {
             <h2 className="text-lg font-bold">
               Jogadores{' '}
               <span className="text-sm font-normal text-slate-500">
-                ({time.players.length}/{MAX_JOGADORES})
+                ({time.players.length}/{limites.max})
               </span>
             </h2>
             {ehDono && !lotado && (
@@ -186,6 +218,12 @@ export default async function TimePage({ params }: Props) {
               </Link>
             )}
           </div>
+
+          <p className={`text-xs mb-4 ${faltamParaInscrever > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+            {time.game} ({limites.formato}): o time precisa de pelo menos {limites.min} jogador(es) para se
+            inscrever em campeonatos e comporta no máximo {limites.max}.
+            {faltamParaInscrever > 0 && ` Faltam ${faltamParaInscrever}.`}
+          </p>
 
           {time.players.length === 0 ? (
             <div className={ui.vazio}>
@@ -271,7 +309,10 @@ export default async function TimePage({ params }: Props) {
             <ul className="space-y-3">
               {time.registrations.map((inscricao) => {
                 const c = inscricao.tournament;
-                const iniciado = c.startDate.getTime() <= Date.now();
+                const aindaEmInscricoes = c.status === CAMP_INSCRICOES;
+                const aprovada = inscricao.status === INSC_APROVADA;
+                const rotuloCampeonato =
+                  c.status === 'EM_ANDAMENTO' ? 'Em andamento' : c.status === 'ENCERRADO' ? 'Encerrado' : c.status === 'CANCELADO' ? 'Cancelado' : null;
 
                 return (
                   <li
@@ -285,8 +326,24 @@ export default async function TimePage({ params }: Props) {
                       <p className="text-xs text-slate-400">
                         Início: {formatarData(c.startDate)} · Prêmio: {formatarPremio(c.prize)}
                       </p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span
+                          className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${
+                            aprovada
+                              ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                              : 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                          }`}
+                        >
+                          {aprovada ? 'Inscrição aprovada' : 'Aguardando aprovação'}
+                        </span>
+                        {rotuloCampeonato && (
+                          <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border border-slate-700 text-slate-300">
+                            {rotuloCampeonato}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    {ehDono && !iniciado && (
+                    {ehDono && aindaEmInscricoes && (
                       <BotaoConfirmar
                         action={cancelarInscricao.bind(null, c.id, time.id)}
                         texto="Cancelar inscrição"
@@ -317,7 +374,7 @@ export default async function TimePage({ params }: Props) {
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{c.name}</p>
                         <p className="text-xs text-slate-500">
-                          {formatarData(c.startDate)} · {c._count.registrations}/{c.maxTeams} times
+                          {formatarData(c.startDate)} · {c._count.registrations}/{c.maxTeams} times aprovados
                         </p>
                       </div>
                       <Link

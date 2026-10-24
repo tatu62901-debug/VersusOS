@@ -12,6 +12,8 @@ model User {
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
+  bannedAt      DateTime? // preenchido quando um admin suspende a conta
+  banReason     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]
@@ -78,6 +80,8 @@ model Team {
   players       Player[]
   registrations Registration[]
   joinRequests  JoinRequest[]
+  partidasComoA Match[]          @relation("PartidaTimeA")
+  partidasComoB Match[]          @relation("PartidaTimeB")
   @@map("teams")
 }
 
@@ -99,25 +103,32 @@ model Player {
   @@map("players")
 }
 
-// Campeonato. Os dados são cadastrados pelo seed (prisma/seed.ts).
+// Campeonato. Os dados iniciais vêm do seed (prisma/seed.ts) e o admin gerencia pelo site.
+// status: INSCRICOES -> EM_ANDAMENTO -> ENCERRADO (ou CANCELADO)
 model Tournament {
-  id            String         @id @default(cuid())
-  name          String         @unique
-  game          String
-  description   String?
-  prize         Int // premiação em reais
-  maxTeams      Int
-  startDate     DateTime
-  imageUrl      String?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  registrations Registration[]
+  id                   String         @id @default(cuid())
+  name                 String         @unique
+  game                 String
+  description          String?
+  prize                Int // premiação em reais
+  maxTeams             Int
+  startDate            DateTime // data de início prevista
+  registrationDeadline DateTime // prazo final das inscrições
+  status               String         @default("INSCRICOES")
+  championName         String? // preenchidos quando a final é decidida
+  runnerUpName         String?
+  imageUrl             String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  registrations        Registration[]
+  matches              Match[]
   @@map("tournaments")
 }
 
 // Inscrição de um time em um campeonato (relação N para N entre Team e Tournament).
 model Registration {
   id           String     @id @default(cuid())
+  status       String     @default("PENDENTE") // PENDENTE ou APROVADA (o admin aprova)
   createdAt    DateTime   @default(now())
   teamId       String
   team         Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -153,4 +164,44 @@ model LoginAttempt {
   @@index([email, createdAt])
   @@index([ip, createdAt])
   @@map("login_attempts")
+}
+
+// Registro das ações feitas pelos administradores (auditoria).
+// Guarda cópias do nome/e-mail do admin e do alvo, pra o histórico continuar legível
+// mesmo se a conta ou o item for apagado depois.
+model AdminLog {
+  id         String   @id @default(cuid())
+  action     String // ex: JOGADOR_REMOVIDO, TIME_EXCLUIDO
+  targetName String
+  reason     String?
+  teamId     String? // quando a ação mexe em um time, para o dono ver o aviso
+  adminName  String
+  adminEmail String
+  createdAt  DateTime @default(now())
+  @@index([createdAt])
+  @@index([teamId])
+  @@map("admin_logs")
+}
+
+// Partida do chaveamento (mata-mata). Os nomes dos times são copiados para a partida
+// pra o histórico continuar certo mesmo se um time for excluído depois.
+model Match {
+  id           String     @id @default(cuid())
+  round        Int // 1 = primeira rodada ... última = final
+  position     Int
+  teamAId      String?
+  teamAName    String?
+  teamBId      String?
+  teamBName    String?
+  scoreA       Int?
+  scoreB       Int?
+  winnerSide   String? // "A" ou "B"
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  teamA        Team?      @relation("PartidaTimeA", fields: [teamAId], references: [id], onDelete: SetNull)
+  teamB        Team?      @relation("PartidaTimeB", fields: [teamBId], references: [id], onDelete: SetNull)
+  @@unique([tournamentId, round, position])
+  @@map("matches")
 }

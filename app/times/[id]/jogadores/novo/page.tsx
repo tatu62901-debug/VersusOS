@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { exigirUsuario } from '@/lib/permissoes';
-import { MAX_JOGADORES } from '@/lib/regras';
+import { limitesDoJogo } from '@/lib/regras';
 import Header from '@/app/components/Header';
 import FormJogador from '@/app/times/FormJogador';
 import { ui } from '@/lib/ui';
@@ -21,7 +21,8 @@ export default async function NovoJogadorPage({ params }: Props) {
   });
   if (!time || time.userId !== user.id) notFound();
 
-  const lotado = time.players.length >= MAX_JOGADORES;
+  const maxJogadores = limitesDoJogo(time.game).max;
+  const lotado = time.players.length >= maxJogadores;
   const donoJaNoElenco = time.players.some((j) => j.userId === user.id);
 
   return (
@@ -36,7 +37,7 @@ export default async function NovoJogadorPage({ params }: Props) {
           {lotado ? (
             <div className={ui.vazio}>
               <p className="text-slate-400 text-sm">
-                O time já tem o máximo de {MAX_JOGADORES} jogadores.
+                O elenco de {time.game} comporta no máximo {maxJogadores} jogador(es).
               </p>
               <Link href={`/times/${time.id}`} className="inline-block mt-3 text-sm text-indigo-400 hover:underline">
                 Voltar para o time

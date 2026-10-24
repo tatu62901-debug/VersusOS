@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
-import { formatarData, formatarPremio, statusCampeonato } from '@/lib/regras';
+import { CAMP_ENCERRADO, INSC_APROVADA, formatarData, formatarPremio, statusCampeonato } from '@/lib/regras';
 import Header from '@/app/components/Header';
 
 interface Props {
@@ -14,7 +14,7 @@ export default async function HomePage({ searchParams }: Props) {
   const user = await getCurrentUser().catch(() => null);
 
   // Página pública: lista os campeonatos do banco de dados (com filtro por ?busca=)
-  const campeonatos = await prisma.tournament.findMany({
+  const encontrados = await prisma.tournament.findMany({
     where: termo
       ? {
           OR: [
@@ -24,8 +24,18 @@ export default async function HomePage({ searchParams }: Props) {
         }
       : undefined,
     orderBy: { startDate: 'asc' },
-    include: { _count: { select: { registrations: true } } },
+    include: {
+      _count: { select: { registrations: { where: { status: INSC_APROVADA } } } },
+    },
   });
+
+  // Em andamento primeiro, depois inscrições abertas, depois encerrados e cancelados
+  const prioridade: Record<string, number> = { EM_ANDAMENTO: 0, INSCRICOES: 1, ENCERRADO: 2, CANCELADO: 3 };
+  const campeonatos = [...encontrados].sort(
+    (a, b) =>
+      (prioridade[a.status] ?? 9) - (prioridade[b.status] ?? 9) ||
+      (a.status === CAMP_ENCERRADO ? b.startDate.getTime() - a.startDate.getTime() : a.startDate.getTime() - b.startDate.getTime())
+  );
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 font-sans">
@@ -109,6 +119,9 @@ export default async function HomePage({ searchParams }: Props) {
                       <span className={`inline-block text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${status.classe}`}>
                         {status.rotulo}
                       </span>
+                      {c.status === CAMP_ENCERRADO && c.championName && (
+                        <p className="text-xs text-amber-400 mt-2 truncate">🏆 Campeão: {c.championName}</p>
+                      )}
                     </div>
                     <div className="mt-3 pt-3 border-t border-slate-800/60 flex items-center justify-between text-xs">
                       <div>

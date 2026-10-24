@@ -47,7 +47,7 @@ export async function getCurrentUser() {
 
   const sessao = await prisma.session.findUnique({
     where: { token: hashToken(token) },
-    include: { user: { select: { id: true, name: true, email: true } } },
+    include: { user: { select: { id: true, name: true, email: true, bannedAt: true } } },
   });
 
   if (!sessao) return null;
@@ -57,7 +57,10 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return sessao.user;
+  // Conta suspensa por um administrador: não é considerada logada
+  if (sessao.user.bannedAt) return null;
+
+  return { id: sessao.user.id, name: sessao.user.name, email: sessao.user.email };
 }
 
 export async function destroySession() {

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
-import { JOGOS } from '@/lib/regras';
+import { INSC_APROVADA, JOGOS } from '@/lib/regras';
 import Header from '@/app/components/Header';
 import Avatar from '@/app/components/Avatar';
 import { ui } from '@/lib/ui';
@@ -59,7 +59,7 @@ export default async function EquipesPage({ searchParams }: Props) {
         orderBy: { createdAt: 'asc' },
         select: { id: true, nickname: true, role: true, avatarUrl: true },
       },
-      _count: { select: { registrations: true } },
+      _count: { select: { registrations: { where: { status: INSC_APROVADA } } } },
     },
   });
 

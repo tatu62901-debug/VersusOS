@@ -1,11 +1,19 @@
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/session';
+import { ehAdmin } from '@/lib/admin';
 
 // Garante que existe alguém logado. Se não houver, manda pro login.
 export async function exigirUsuario() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+  return user;
+}
+
+// Garante que quem está logado é ADMINISTRADOR. Para qualquer outra pessoa a página "não existe".
+export async function exigirAdmin() {
+  const user = await exigirUsuario();
+  if (!ehAdmin(user.email)) notFound();
   return user;
 }
 

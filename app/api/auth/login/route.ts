@@ -75,6 +75,16 @@ export async function POST(request: Request) {
     // Login certo: zera as falhas deste e-mail
     await prisma.loginAttempt.deleteMany({ where: { email } });
 
+    // Conta suspensa por um administrador (só revelamos depois de a senha estar certa)
+    if (usuario.bannedAt) {
+      return NextResponse.json(
+        {
+          error: `Esta conta foi suspensa pela administração.${usuario.banReason ? ` Motivo: ${usuario.banReason}` : ''}`,
+        },
+        { status: 403 }
+      );
+    }
+
     await createSession(usuario.id, {
       ipAddress: ip,
       userAgent: request.headers.get('user-agent'),

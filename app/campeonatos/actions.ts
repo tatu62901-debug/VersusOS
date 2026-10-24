@@ -3,10 +3,17 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { exigirUsuario } from '@/lib/permissoes';
-import { MIN_JOGADORES_INSCRICAO, statusCampeonato } from '@/lib/regras';
+import {
+  CAMP_INSCRICOES,
+  INSC_APROVADA,
+  INSC_PENDENTE,
+  limitesDoJogo,
+  statusCampeonato,
+} from '@/lib/regras';
 import { type EstadoForm, texto } from '@/lib/validacao';
 
 // Só o DONO do time pode inscrevê-lo (ou cancelar a inscrição) em um campeonato.
+// A inscrição nasce PENDENTE e só vale depois que a administração aprova.
 export async function inscreverTime(
   campeonatoId: string,
   _estado: EstadoForm,
@@ -24,7 +31,9 @@ export async function inscreverTime(
     }),
     prisma.tournament.findUnique({
       where: { id: campeonatoId },
-      include: { _count: { select: { registrations: true } } },
+      include: {
+        _count: { select: { registrations: { where: { status: INSC_APROVADA } } } },
+      },
     }),
   ]);
 
@@ -35,32 +44,42 @@ export async function inscreverTime(
 
   const status = statusCampeonato(campeonato, campeonato._count.registrations);
   if (!status.aberto) {
-    return {
-      erro:
-        status.rotulo === 'Encerrado'
-          ? 'As inscrições deste campeonato já foram encerradas.'
-          : 'Este campeonato não tem mais vagas.',
+    const mensagens: Record<string, string> = {
+      PRAZO: 'O prazo de inscrição deste campeonato já terminou.',
+      LOTADO: 'Este campeonato não tem mais vagas.',
+      ANDAMENTO: 'Este campeonato já começou.',
+      ENCERRADO: 'Este campeonato já terminou.',
+      CANCELADO: 'Este campeonato foi cancelado.',
     };
+    return { erro: mensagens[status.chave] ?? 'As inscrições não estão abertas.' };
   }
 
   if (time.game !== campeonato.game) {
     return { erro: `Este campeonato é de ${campeonato.game}, mas o time joga ${time.game}.` };
   }
 
-  if (time._count.players < MIN_JOGADORES_INSCRICAO) {
+  const limites = limitesDoJogo(time.game);
+  if (time._count.players < limites.min) {
     return {
-      erro: `O time precisa ter pelo menos ${MIN_JOGADORES_INSCRICAO} jogadores para se inscrever.`,
+      erro: `Para jogar ${time.game} (${limites.formato}), o time precisa ter pelo menos ${limites.min} jogador(es). Hoje ele tem ${time._count.players}.`,
     };
   }
 
   const jaInscrito = await prisma.registration.findUnique({
     where: { teamId_tournamentId: { teamId: timeId, tournamentId: campeonatoId } },
   });
-  if (jaInscrito) return { erro: 'Este time já está inscrito neste campeonato.' };
+  if (jaInscrito) {
+    return {
+      erro:
+        jaInscrito.status === INSC_PENDENTE
+          ? 'A inscrição deste time já foi enviada e está aguardando aprovação.'
+          : 'Este time já está inscrito neste campeonato.',
+    };
+  }
 
   try {
     await prisma.registration.create({
-      data: { teamId: timeId, tournamentId: campeonatoId },
+      data: { teamId: timeId, tournamentId: campeonatoId, status: INSC_PENDENTE },
     });
   } catch (error) {
     console.error('Erro ao inscrever time:', error);
@@ -70,9 +89,11 @@ export async function inscreverTime(
   revalidatePath(`/campeonatos/${campeonatoId}`);
   revalidatePath(`/times/${timeId}`);
   revalidatePath('/painel');
-  revalidatePath('/');
+  revalidatePath('/admin', 'layout');
 
-  return { sucesso: `O time ${time.name} foi inscrito com sucesso!` };
+  return {
+    sucesso: `Inscrição do time ${time.name} enviada! Ela vale depois que a administração aprovar.`,
+  };
 }
 
 export async function cancelarInscricao(campeonatoId: string, timeId: string): Promise<void> {
@@ -87,7 +108,7 @@ export async function cancelarInscricao(campeonatoId: string, timeId: string): P
   if (inscricao.team.userId !== user.id) {
     throw new Error('Você não tem permissão para fazer isso.');
   }
-  if (inscricao.tournament.startDate.getTime() <= Date.now()) {
+  if (inscricao.tournament.status !== CAMP_INSCRICOES) {
     throw new Error('Este campeonato já começou, não dá mais pra cancelar a inscrição.');
   }
 
@@ -96,5 +117,6 @@ export async function cancelarInscricao(campeonatoId: string, timeId: string): P
   revalidatePath(`/campeonatos/${campeonatoId}`);
   revalidatePath(`/times/${timeId}`);
   revalidatePath('/painel');
+  revalidatePath('/admin', 'layout');
   revalidatePath('/');
 }
