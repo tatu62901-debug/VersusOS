@@ -32,10 +32,9 @@ export default function FormSenha() {
           name="senhaNova"
           type="password"
           required
-          minLength={6}
           maxLength={72}
           autoComplete="new-password"
-          placeholder="Mínimo de 6 caracteres"
+          placeholder="Mínimo de 8 caracteres"
           className={ui.campo}
         />
       </div>

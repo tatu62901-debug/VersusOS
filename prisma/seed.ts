@@ -261,19 +261,42 @@ async function criarDemonstracao() {
 }
 
 // Contas de administrador (o admin é definido pela lista de e-mails em lib/admin.ts).
-// A senha inicial é "admin" (ou o valor de ADMIN_SEED_PASSWORD). TROQUE depois de publicar o site!
+// A senha inicial é a de SENHA_PADRAO (ou o valor de ADMIN_SEED_PASSWORD) e precisa ter
+// pelo menos 8 caracteres, como a regra do cadastro. TROQUE depois de publicar o site!
 const admins = [
   { name: "Admin 1", email: "admin1@versusos.com" },
   { name: "Admin 2", email: "admin2@versusos.com" },
 ];
 
+const SENHA_PADRAO = "Admin@2026";
+const SENHA_ANTIGA = "admin"; // valor das primeiras versões (só 5 caracteres)
+
 async function criarAdmins() {
-  const senha = process.env.ADMIN_SEED_PASSWORD || "admin";
+  const senha = process.env.ADMIN_SEED_PASSWORD || SENHA_PADRAO;
+  if (senha.length < 8 || senha.length > 72) {
+    throw new Error("ADMIN_SEED_PASSWORD precisa ter entre 8 e 72 caracteres.");
+  }
   const hash = await bcrypt.hash(senha, 10);
 
   for (const a of admins) {
-    const existente = await prisma.user.findUnique({ where: { email: a.email } });
-    if (existente) continue; // não mexe em conta que já existe (nem na senha dela)
+    const existente = await prisma.user.findUnique({
+      where: { email: a.email },
+      include: { accounts: { where: { providerId: "credential" }, take: 1 } },
+    });
+
+    if (existente) {
+      // Conta que ainda usa a senha antiga "admin" (menos de 8 caracteres) ganha a senha nova.
+      // Conta cuja senha já foi trocada não é mexida.
+      const conta = existente.accounts[0];
+      if (conta?.password && (await bcrypt.compare(SENHA_ANTIGA, conta.password))) {
+        await prisma.account.update({
+          where: { id: conta.id },
+          data: { password: hash, updatedAt: new Date() },
+        });
+        console.log(`✔ Senha fraca antiga substituída: ${a.email}`);
+      }
+      continue;
+    }
 
     await prisma.user.create({
       data: {

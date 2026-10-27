@@ -103,8 +103,10 @@ const handleSubmit = async (e: React.FormEvent) => {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               placeholder="••••••••"
+              autoComplete="new-password"
               className="w-full px-4 py-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 text-sm"
             />
+            <p className="text-[11px] text-slate-500 mt-1">Mínimo de 8 caracteres.</p>
           </div>
 
           <button

@@ -100,7 +100,7 @@ export function validarNovaSenha(
 ): { ok: true } | { ok: false; erro: string } {
   if (!senhaAtual) return falha('Informe a sua senha atual.');
   if (!senhaNova) return falha('Informe a nova senha.');
-  if (senhaNova.length < 6) return falha('A nova senha deve ter pelo menos 6 caracteres.');
+  if (senhaNova.length < 8) return falha('A nova senha deve ter pelo menos 8 caracteres.');
   if (senhaNova.length > 72) return falha('A nova senha pode ter no máximo 72 caracteres.');
   if (senhaNova === senhaAtual) return falha('A nova senha precisa ser diferente da atual.');
   if (senhaNova !== confirmacao) return falha('A confirmação não é igual à nova senha.');
